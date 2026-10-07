@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>온라인셀러 주문서 변환기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: 제목 → 파일 넣기 → (파일을 넣으면) 미리보기 → 하단 가운데 고정 버튼 바 */
+:root{
+  --bg:#F4F6FB; --surface:#FFFFFF; --line:#DFE4F0; --line-strong:#C7CFE2;
+  --fg:#141A2E; --muted:#5A6382; --faint:#8A92AD;
+  --accent:#295BFF; --accent-ink:#FFFFFF; --accent-weak:#EAF0FF; --accent-shadow:rgba(41,91,255,.32);
+  --warn:#A44A06; --warn-bg:#FFF3E2; --warn-line:#F3C995;
+  --ok:#0F7A55; --ok-bg:#E5F6EF;
+  --sample:#6B4FD8; --sample-bg:#F0ECFF;
+  --font-ui:"Pretendard Variable",Pretendard,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-data:"JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1020; --surface:#151A2D; --line:#272E4A; --line-strong:#38405F;
+    --fg:#E7EAF4; --muted:#A0A8C4; --faint:#6E7696;
+    --accent:#5E84FF; --accent-ink:#0B0F1E; --accent-weak:#1B2550; --accent-shadow:rgba(94,132,255,.28);
+    --warn:#F2A65A; --warn-bg:#33230F; --warn-line:#6B4A20;
+    --ok:#45C996; --ok-bg:#12302A;
+    --sample:#B3A1FF; --sample-bg:#251E4A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1020; --surface:#151A2D; --line:#272E4A; --line-strong:#38405F;
+  --fg:#E7EAF4; --muted:#A0A8C4; --faint:#6E7696;
+  --accent:#5E84FF; --accent-ink:#0B0F1E; --accent-weak:#1B2550; --accent-shadow:rgba(94,132,255,.28);
+  --warn:#F2A65A; --warn-bg:#33230F; --warn-line:#6B4A20;
+  --ok:#45C996; --ok-bg:#12302A;
+  --sample:#B3A1FF; --sample-bg:#251E4A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 0;display:flex;flex-direction:column;gap:18px;min-height:100%}
+@media (max-width:480px){.wrap{padding-inline:16px;padding-block:20px 0}}
+
+h1{margin:0;font-size:clamp(22px,3vw,28px);line-height:1.25;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+
+/* 파일 넣기 */
+.drop{position:relative;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:26px;min-height:240px;border:1.5px dashed var(--line-strong);background:var(--surface);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s,min-height .2s}
+.drop.compact{min-height:0;padding:16px 18px;gap:12px}
+.drop:hover{border-color:var(--accent)}
+.drop.over{border-color:var(--accent);background:var(--accent-weak)}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-main{display:flex;gap:16px;align-items:center;justify-content:center}
+.drop.compact .drop-main{justify-content:flex-start;gap:12px}
+.drop-ico{flex:none;width:52px;height:52px;border-radius:12px;background:var(--accent-weak);display:grid;place-items:center;color:var(--accent)}
+.drop.compact .drop-ico{width:36px;height:36px;border-radius:9px}
+.drop-ico svg{width:26px;height:26px}
+.drop.compact .drop-ico svg{width:20px;height:20px}
+.drop-title{font-size:17px;font-weight:700;margin:0}
+.drop.compact .drop-title{font-size:14px;font-weight:600;color:var(--muted)}
+.file-chip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);position:relative;z-index:1;cursor:default}
+.file-name{font-weight:600;word-break:break-all;min-width:0;flex:1 1 200px}
+.file-meta{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.err{padding:10px 12px;border-radius:10px;background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn);font-size:13.5px;position:relative;z-index:1}
+
+/* 미리보기 */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);min-width:0;overflow:hidden}
+.result-bar{display:flex;flex-direction:column;gap:6px;padding:14px 20px;border-bottom:1px solid var(--line)}
+.res-title{margin:0;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--muted)}
+.stats{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:14px;font-variant-numeric:tabular-nums}
+.stats b{font-weight:700}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.pill.sample{background:var(--sample-bg);color:var(--sample)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+thead th{background:var(--bg);text-align:left;font-weight:600;color:var(--muted);padding:8px 12px 9px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:bottom}
+th .col{display:block;font-family:var(--font-data);font-size:11px;color:var(--faint);font-weight:500;margin-bottom:2px}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+td.mono{font-family:var(--font-data);font-size:12.5px}
+td.wrapc{white-space:normal;min-width:220px}
+td.num{text-align:right}
+td.empty{color:var(--faint)}
+td.flag{background:var(--warn-bg);color:var(--warn);font-weight:600}
+td.state{width:1%}
+.issue{display:block;font-size:12px;color:var(--warn);margin-top:3px;white-space:normal;min-width:120px}
+.more{padding:10px 20px;font-size:13px;color:var(--muted);border-top:1px solid var(--line)}
+
+/* 하단 가운데 버튼 바 */
+.spacer{flex:1 1 auto}
+.actions{position:sticky;bottom:0;z-index:5;display:flex;flex-direction:column;align-items:center;gap:8px;padding-block:20px calc(20px + env(safe-area-inset-bottom, 0px));background:linear-gradient(to top,var(--bg) 72%,transparent)}
+.actions-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;width:100%}
+.btn{appearance:none;border:0;font:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;transition:filter .15s,transform .1s}
+.btn:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn-main{grid-column:2;min-width:340px;padding:19px 36px;font-size:19px;border-radius:14px;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px -10px var(--accent-shadow)}
+.btn-main svg{width:22px;height:22px}
+.btn-main:hover:not(:disabled){filter:brightness(1.07)}
+.btn-main:disabled{background:var(--line);color:var(--faint);box-shadow:none;cursor:not-allowed}
+.btn-reset{grid-column:3;justify-self:start;padding:17px 22px;font-size:16px;border-radius:14px;background:var(--surface);color:var(--fg);border:1px solid var(--line-strong)}
+.btn-reset svg{width:18px;height:18px}
+.btn-reset:hover:not(:disabled){border-color:var(--fg)}
+.btn-reset:disabled{color:var(--faint);border-color:var(--line);cursor:not-allowed}
+@media (max-width:640px){
+  .actions-row{grid-template-columns:minmax(0,1fr);gap:10px}
+  .btn-main,.btn-reset{grid-column:1;justify-self:stretch;min-width:0;width:100%}
+  .btn-main{padding:18px 20px;font-size:18px}
+  .btn-reset{padding:14px 20px;font-size:15px}
+}
+.msg{font-size:13.5px;color:var(--muted);min-height:1.3em;text-align:center}
+.link-btn{appearance:none;background:none;border:0;padding:2px 6px;font:inherit;font-size:12.5px;color:var(--faint);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.link-btn:hover{color:var(--muted)}
+.link-btn:focus-visible{outline:2px solid var(--accent);border-radius:4px}
+
+/* 관리번호 최초 입력 */
+.setup{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:14px 18px;background:var(--accent-weak);border:1px solid var(--accent);border-radius:var(--r)}
+.setup-text{flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.setup-text b{font-size:15px}
+.setup-text span{color:var(--muted);font-size:13px}
+.setup-form{display:flex;gap:8px;flex:1 1 260px;min-width:0}
+.setup input{flex:1 1 auto;min-width:0;font:inherit;font-family:var(--font-data);font-size:15px;padding:10px 12px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);color:var(--fg)}
+.setup input:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.btn-save{flex:none;padding:10px 20px;font-size:15px;border-radius:9px;background:var(--accent);color:var(--accent-ink)}
+.btn-save:hover{filter:brightness(1.07)}
+.msg.ok{color:var(--ok)}.msg.warn{color:var(--warn)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>온라인셀러 주문서 변환기</h1>
+
+  <form class="setup" id="setup" autocomplete="off" hidden>
+    <div class="setup-text"><b>관리번호를 한 번만 입력해 주세요</b><span>이 브라우저에만 저장되고 다음부터 자동으로 들어갑니다.</span></div>
+    <div class="setup-form">
+      <input type="text" id="mgmtInput" inputmode="numeric" placeholder="관리번호" aria-label="관리번호" spellcheck="false">
+      <button class="btn btn-save" type="submit">저장</button>
+    </div>
+  </form>
+
+  <label class="drop" id="drop" for="file">
+    <input type="file" id="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" aria-label="원본 엑셀 파일 선택">
+    <div class="drop-main">
+      <div class="drop-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="m9.5 14.5 2.5 2.5 2.5-2.5"/></svg>
+      </div>
+      <p class="drop-title" id="dropTitle">원본 파일을 여기에 놓거나 눌러서 선택</p>
+    </div>
+    <div class="file-chip" id="fileChip" hidden>
+      <span class="file-name" id="fileName"></span>
+      <span class="file-meta" id="fileMeta"></span>
+    </div>
+    <div class="err" id="err" hidden></div>
+  </label>
+
+  <section class="panel" id="result" aria-labelledby="resTitle">
+    <div class="result-bar"><h2 class="res-title" id="resTitle">주문서 미리보기</h2><div class="stats" id="stats"></div></div>
+    <div class="table-wrap">
+      <table id="preview">
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+    <div class="more" id="more" hidden></div>
+  </section>
+
+  <div class="spacer"></div>
+
+  <div class="actions">
+    <div class="actions-row">
+      <button class="btn btn-main" id="dlBtn" type="button" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+        수정본 내려받기
+      </button>
+      <button class="btn btn-reset" id="resetBtn" type="button" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        초기화
+      </button>
+    </div>
+    <span class="msg" id="msg" role="status" aria-live="polite"></span>
+    <button class="link-btn" id="mgmtEdit" type="button" hidden>관리번호 변경</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+"use strict";
+/* ---------- 기존 _수정 파일에서 가져온 서식 템플릿 (고객 정보 없음) ---------- */
+const TPL = {"contentTypes": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/><Override PartName=\"/xl/worksheets/sheet2.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/><Override PartName=\"/xl/theme/theme1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.theme+xml\"/><Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/><Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/><Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/><Override PartName=\"/docProps/app.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/><\/Types>", "rels": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" Target=\"docProps/app.xml\"/><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/><\/Relationships>", "app": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\"><Application>Microsoft Excel<\/Application><DocSecurity>0<\/DocSecurity><ScaleCrop>false<\/ScaleCrop><HeadingPairs><vt:vector size=\"2\" baseType=\"variant\"><vt:variant><vt:lpstr>워크시트<\/vt:lpstr><\/vt:variant><vt:variant><vt:i4>2<\/vt:i4><\/vt:variant><\/vt:vector><\/HeadingPairs><TitlesOfParts><vt:vector size=\"2\" baseType=\"lpstr\"><vt:lpstr>주문서<\/vt:lpstr><vt:lpstr>Sheet1<\/vt:lpstr><\/vt:vector><\/TitlesOfParts><LinksUpToDate>false<\/LinksUpToDate><SharedDoc>false<\/SharedDoc><HyperlinksChanged>false<\/HyperlinksChanged><AppVersion>16.0300<\/AppVersion><\/Properties>", "core": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><dc:creator>Apache POI<\/dc:creator><dcterms:created xsi:type=\"dcterms:W3CDTF\">{NOW}<\/dcterms:created><dcterms:modified xsi:type=\"dcterms:W3CDTF\">{NOW}<\/dcterms:modified><\/cp:coreProperties>", "workbook": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"x15 xr xr6 xr10 xr2\" xmlns:x15=\"http://schemas.microsoft.com/office/spreadsheetml/2010/11/main\" xmlns:xr=\"http://schemas.microsoft.com/office/spreadsheetml/2014/revision\" xmlns:xr6=\"http://schemas.microsoft.com/office/spreadsheetml/2016/revision6\" xmlns:xr10=\"http://schemas.microsoft.com/office/spreadsheetml/2016/revision10\" xmlns:xr2=\"http://schemas.microsoft.com/office/spreadsheetml/2015/revision2\"><fileVersion appName=\"xl\" lastEdited=\"7\" lowestEdited=\"6\" rupBuild=\"30430\"/><workbookPr defaultThemeVersion=\"202300\"/><bookViews><workbookView xWindow=\"-60\" yWindow=\"810\" windowWidth=\"27240\" windowHeight=\"14940\" xr2:uid=\"{00000000-000D-0000-FFFF-FFFF00000000}\"/><\/bookViews><sheets><sheet name=\"주문서\" sheetId=\"1\" r:id=\"rId1\"/><sheet name=\"Sheet1\" sheetId=\"2\" r:id=\"rId2\"/><\/sheets><calcPr calcId=\"0\"/><\/workbook>", "workbookRels": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme\" Target=\"theme/theme1.xml\"/><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet2.xml\"/><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/><Relationship Id=\"rId5\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings\" Target=\"sharedStrings.xml\"/><Relationship Id=\"rId4\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/><\/Relationships>", "theme": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office 테마\"><a:themeElements><a:clrScheme name=\"Office\"><a:dk1><a:sysClr val=\"windowText\" lastClr=\"000000\"/><\/a:dk1><a:lt1><a:sysClr val=\"window\" lastClr=\"FFFFFF\"/><\/a:lt1><a:dk2><a:srgbClr val=\"0E2841\"/><\/a:dk2><a:lt2><a:srgbClr val=\"E8E8E8\"/><\/a:lt2><a:accent1><a:srgbClr val=\"156082\"/><\/a:accent1><a:accent2><a:srgbClr val=\"E97132\"/><\/a:accent2><a:accent3><a:srgbClr val=\"196B24\"/><\/a:accent3><a:accent4><a:srgbClr val=\"0F9ED5\"/><\/a:accent4><a:accent5><a:srgbClr val=\"A02B93\"/><\/a:accent5><a:accent6><a:srgbClr val=\"4EA72E\"/><\/a:accent6><a:hlink><a:srgbClr val=\"467886\"/><\/a:hlink><a:folHlink><a:srgbClr val=\"96607D\"/><\/a:folHlink><\/a:clrScheme><a:fontScheme name=\"Office\"><a:majorFont><a:latin typeface=\"Aptos Display\" panose=\"02110004020202020204\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/><a:font script=\"Jpan\" typeface=\"游ゴシック Light\"/><a:font script=\"Hang\" typeface=\"맑은 고딕\"/><a:font script=\"Hans\" typeface=\"等线 Light\"/><a:font script=\"Hant\" typeface=\"新細明體\"/><a:font script=\"Arab\" typeface=\"Times New Roman\"/><a:font script=\"Hebr\" typeface=\"Times New Roman\"/><a:font script=\"Thai\" typeface=\"Tahoma\"/><a:font script=\"Ethi\" typeface=\"Nyala\"/><a:font script=\"Beng\" typeface=\"Vrinda\"/><a:font script=\"Gujr\" typeface=\"Shruti\"/><a:font script=\"Khmr\" typeface=\"MoolBoran\"/><a:font script=\"Knda\" typeface=\"Tunga\"/><a:font script=\"Guru\" typeface=\"Raavi\"/><a:font script=\"Cans\" typeface=\"Euphemia\"/><a:font script=\"Cher\" typeface=\"Plantagenet Cherokee\"/><a:font script=\"Yiii\" typeface=\"Microsoft Yi Baiti\"/><a:font script=\"Tibt\" typeface=\"Microsoft Himalaya\"/><a:font script=\"Thaa\" typeface=\"MV Boli\"/><a:font script=\"Deva\" typeface=\"Mangal\"/><a:font script=\"Telu\" typeface=\"Gautami\"/><a:font script=\"Taml\" typeface=\"Latha\"/><a:font script=\"Syrc\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Orya\" typeface=\"Kalinga\"/><a:font script=\"Mlym\" typeface=\"Kartika\"/><a:font script=\"Laoo\" typeface=\"DokChampa\"/><a:font script=\"Sinh\" typeface=\"Iskoola Pota\"/><a:font script=\"Mong\" typeface=\"Mongolian Baiti\"/><a:font script=\"Viet\" typeface=\"Times New Roman\"/><a:font script=\"Uigh\" typeface=\"Microsoft Uighur\"/><a:font script=\"Geor\" typeface=\"Sylfaen\"/><a:font script=\"Armn\" typeface=\"Arial\"/><a:font script=\"Bugi\" typeface=\"Leelawadee UI\"/><a:font script=\"Bopo\" typeface=\"Microsoft JhengHei\"/><a:font script=\"Java\" typeface=\"Javanese Text\"/><a:font script=\"Lisu\" typeface=\"Segoe UI\"/><a:font script=\"Mymr\" typeface=\"Myanmar Text\"/><a:font script=\"Nkoo\" typeface=\"Ebrima\"/><a:font script=\"Olck\" typeface=\"Nirmala UI\"/><a:font script=\"Osma\" typeface=\"Ebrima\"/><a:font script=\"Phag\" typeface=\"Phagspa\"/><a:font script=\"Syrn\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syrj\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syre\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Sora\" typeface=\"Nirmala UI\"/><a:font script=\"Tale\" typeface=\"Microsoft Tai Le\"/><a:font script=\"Talu\" typeface=\"Microsoft New Tai Lue\"/><a:font script=\"Tfng\" typeface=\"Ebrima\"/><\/a:majorFont><a:minorFont><a:latin typeface=\"Aptos Narrow\" panose=\"02110004020202020204\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/><a:font script=\"Jpan\" typeface=\"游ゴシック\"/><a:font script=\"Hang\" typeface=\"맑은 고딕\"/><a:font script=\"Hans\" typeface=\"等线\"/><a:font script=\"Hant\" typeface=\"新細明體\"/><a:font script=\"Arab\" typeface=\"Arial\"/><a:font script=\"Hebr\" typeface=\"Arial\"/><a:font script=\"Thai\" typeface=\"Tahoma\"/><a:font script=\"Ethi\" typeface=\"Nyala\"/><a:font script=\"Beng\" typeface=\"Vrinda\"/><a:font script=\"Gujr\" typeface=\"Shruti\"/><a:font script=\"Khmr\" typeface=\"DaunPenh\"/><a:font script=\"Knda\" typeface=\"Tunga\"/><a:font script=\"Guru\" typeface=\"Raavi\"/><a:font script=\"Cans\" typeface=\"Euphemia\"/><a:font script=\"Cher\" typeface=\"Plantagenet Cherokee\"/><a:font script=\"Yiii\" typeface=\"Microsoft Yi Baiti\"/><a:font script=\"Tibt\" typeface=\"Microsoft Himalaya\"/><a:font script=\"Thaa\" typeface=\"MV Boli\"/><a:font script=\"Deva\" typeface=\"Mangal\"/><a:font script=\"Telu\" typeface=\"Gautami\"/><a:font script=\"Taml\" typeface=\"Latha\"/><a:font script=\"Syrc\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Orya\" typeface=\"Kalinga\"/><a:font script=\"Mlym\" typeface=\"Kartika\"/><a:font script=\"Laoo\" typeface=\"DokChampa\"/><a:font script=\"Sinh\" typeface=\"Iskoola Pota\"/><a:font script=\"Mong\" typeface=\"Mongolian Baiti\"/><a:font script=\"Viet\" typeface=\"Arial\"/><a:font script=\"Uigh\" typeface=\"Microsoft Uighur\"/><a:font script=\"Geor\" typeface=\"Sylfaen\"/><a:font script=\"Armn\" typeface=\"Arial\"/><a:font script=\"Bugi\" typeface=\"Leelawadee UI\"/><a:font script=\"Bopo\" typeface=\"Microsoft JhengHei\"/><a:font script=\"Java\" typeface=\"Javanese Text\"/><a:font script=\"Lisu\" typeface=\"Segoe UI\"/><a:font script=\"Mymr\" typeface=\"Myanmar Text\"/><a:font script=\"Nkoo\" typeface=\"Ebrima\"/><a:font script=\"Olck\" typeface=\"Nirmala UI\"/><a:font script=\"Osma\" typeface=\"Ebrima\"/><a:font script=\"Phag\" typeface=\"Phagspa\"/><a:font script=\"Syrn\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syrj\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syre\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Sora\" typeface=\"Nirmala UI\"/><a:font script=\"Tale\" typeface=\"Microsoft Tai Le\"/><a:font script=\"Talu\" typeface=\"Microsoft New Tai Lue\"/><a:font script=\"Tfng\" typeface=\"Ebrima\"/><\/a:minorFont><\/a:fontScheme><a:fmtScheme name=\"Office\"><a:fillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/><\/a:solidFill><a:gradFill rotWithShape=\"1\"><a:gsLst><a:gs pos=\"0\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"110000\"/><a:satMod val=\"105000\"/><a:tint val=\"67000\"/><\/a:schemeClr><\/a:gs><a:gs pos=\"50000\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"105000\"/><a:satMod val=\"103000\"/><a:tint val=\"73000\"/><\/a:schemeClr><\/a:gs><a:gs pos=\"100000\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"105000\"/><a:satMod val=\"109000\"/><a:tint val=\"81000\"/><\/a:schemeClr><\/a:gs><\/a:gsLst><a:lin ang=\"5400000\" scaled=\"0\"/><\/a:gradFill><a:gradFill rotWithShape=\"1\"><a:gsLst><a:gs pos=\"0\"><a:schemeClr val=\"phClr\"><a:satMod val=\"103000\"/><a:lumMod val=\"102000\"/><a:tint val=\"94000\"/><\/a:schemeClr><\/a:gs><a:gs pos=\"50000\"><a:schemeClr val=\"phClr\"><a:satMod val=\"110000\"/><a:lumMod val=\"100000\"/><a:shade val=\"100000\"/><\/a:schemeClr><\/a:gs><a:gs pos=\"100000\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"99000\"/><a:satMod val=\"120000\"/><a:shade val=\"78000\"/><\/a:schemeClr><\/a:gs><\/a:gsLst><a:lin ang=\"5400000\" scaled=\"0\"/><\/a:gradFill><\/a:fillStyleLst><a:lnStyleLst><a:ln w=\"12700\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"phClr\"/><\/a:solidFill><a:prstDash val=\"solid\"/><a:miter lim=\"800000\"/><\/a:ln><a:ln w=\"19050\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"phClr\"/><\/a:solidFill><a:prstDash val=\"solid\"/><a:miter lim=\"800000\"/><\/a:ln><a:ln w=\"25400\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"phClr\"/><\/a:solidFill><a:prstDash val=\"solid\"/><a:miter lim=\"800000\"/><\/a:ln><\/a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/><\/a:effectStyle><a:effectStyle><a:effectLst/><\/a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad=\"57150\" dist=\"19050\" dir=\"5400000\" algn=\"ctr\" rotWithShape=\"0\"><a:srgbClr val=\"000000\"><a:alpha val=\"63000\"/><\/a:srgbClr><\/a:outerShdw><\/a:effectLst><\/a:effectStyle><\/a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/><\/a:solidFill><a:solidFill><a:schemeClr val=\"phClr\"><a:tint val=\"95000\"/><a:satMod val=\"170000\"/><\/a:schemeClr><\/a:solidFill><a:gradFill rotWithShape=\"1\"><a:gsLst><a:gs pos=\"0\"><a:schemeClr val=\"phClr\"><a:tint val=\"93000\"/><a:satMod val=\"150000\"/><a:shade val=\"98000\"/><a:lumMod val=\"102000\"/><\/a:schemeClr><\/a:gs><a:gs pos=\"50000\"><a:schemeClr val=\"phClr\"><a:tint val=\"98000\"/><a:satMod val=\"130000\"/><a:shade val=\"90000\"/><a:lumMod val=\"103000\"/><\/a:schemeClr><\/a:gs><a:gs pos=\"100000\"><a:schemeClr val=\"phClr\"><a:shade val=\"63000\"/><a:satMod val=\"120000\"/><\/a:schemeClr><\/a:gs><\/a:gsLst><a:lin ang=\"5400000\" scaled=\"0\"/><\/a:gradFill><\/a:bgFillStyleLst><\/a:fmtScheme><\/a:themeElements><a:objectDefaults><a:lnDef><a:spPr/><a:bodyPr/><a:lstStyle/><a:style><a:lnRef idx=\"2\"><a:schemeClr val=\"accent1\"/><\/a:lnRef><a:fillRef idx=\"0\"><a:schemeClr val=\"accent1\"/><\/a:fillRef><a:effectRef idx=\"1\"><a:schemeClr val=\"accent1\"/><\/a:effectRef><a:fontRef idx=\"minor\"><a:schemeClr val=\"tx1\"/><\/a:fontRef><\/a:style><\/a:lnDef><\/a:objectDefaults><a:extraClrSchemeLst/><a:extLst><a:ext uri=\"{05A4C25C-085E-4340-85A3-A5531E510DB2}\"><thm15:themeFamily xmlns:thm15=\"http://schemas.microsoft.com/office/thememl/2012/main\" name=\"Office Theme\" id=\"{2E142A2C-CD16-42D6-873A-C26D2A0506FA}\" vid=\"{1BDDFF52-6CD6-40A5-AB3C-68EB2F1E4D0A}\"/><\/a:ext><\/a:extLst><\/a:theme>", "styles": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"x14ac x16r2 xr\" xmlns:x14ac=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac\" xmlns:x16r2=\"http://schemas.microsoft.com/office/spreadsheetml/2015/02/main\" xmlns:xr=\"http://schemas.microsoft.com/office/spreadsheetml/2014/revision\"><fonts count=\"9\"><font><sz val=\"11\"/><color indexed=\"8\"/><name val=\"맑은 고딕\"/><family val=\"2\"/><scheme val=\"minor\"/><\/font><font><b/><sz val=\"10\"/><color rgb=\"FFFFFFFF\"/><name val=\"맑은 고딕\"/><family val=\"3\"/><charset val=\"129\"/><\/font><font><sz val=\"10\"/><color rgb=\"FF000000\"/><name val=\"맑은 고딕\"/><family val=\"3\"/><charset val=\"129\"/><\/font><font><sz val=\"8\"/><name val=\"맑은 고딕\"/><family val=\"3\"/><charset val=\"129\"/><scheme val=\"minor\"/><\/font><font><sz val=\"9\"/><color theme=\"1\"/><name val=\"굴림\"/><family val=\"3\"/><charset val=\"129\"/><\/font><font><sz val=\"10\"/><color theme=\"1\"/><name val=\"맑은 고딕\"/><family val=\"3\"/><charset val=\"129\"/><scheme val=\"minor\"/><\/font><font><b/><sz val=\"10\"/><color theme=\"1\"/><name val=\"굴림\"/><family val=\"3\"/><charset val=\"129\"/><\/font><font><sz val=\"11\"/><name val=\"맑은 고딕\"/><family val=\"3\"/><charset val=\"129\"/><\/font><font><sz val=\"9\"/><name val=\"맑은 고딕\"/><family val=\"3\"/><charset val=\"129\"/><\/font><\/fonts><fills count=\"5\"><fill><patternFill patternType=\"none\"/><\/fill><fill><patternFill patternType=\"gray125\"/><\/fill><fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFCCCCCC\"/><\/patternFill><\/fill><fill><patternFill patternType=\"solid\"><fgColor rgb=\"FF993300\"/><\/patternFill><\/fill><fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFCCFFCC\"/><bgColor indexed=\"64\"/><\/patternFill><\/fill><\/fills><borders count=\"4\"><border><left/><right/><top/><bottom/><diagonal/><\/border><border><left style=\"thin\"><color rgb=\"FF000000\"/><\/left><right style=\"thin\"><color rgb=\"FF000000\"/><\/right><top style=\"thin\"><color rgb=\"FF000000\"/><\/top><bottom style=\"thin\"><color rgb=\"FF000000\"/><\/bottom><diagonal/><\/border><border><left style=\"thin\"><color indexed=\"64\"/><\/left><right style=\"thin\"><color indexed=\"64\"/><\/right><top style=\"thin\"><color indexed=\"64\"/><\/top><bottom style=\"thin\"><color indexed=\"64\"/><\/bottom><diagonal/><\/border><border><left style=\"thin\"><color rgb=\"FF000000\"/><\/left><right style=\"thin\"><color rgb=\"FF000000\"/><\/right><top style=\"thin\"><color rgb=\"FF000000\"/><\/top><bottom/><diagonal/><\/border><\/borders><cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"><alignment vertical=\"center\"/><\/xf><\/cellStyleXfs><cellXfs count=\"11\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"><alignment vertical=\"center\"/><\/xf><xf numFmtId=\"0\" fontId=\"0\" fillId=\"2\" borderId=\"0\" xfId=\"0\" applyFill=\"1\" applyAlignment=\"1\"><alignment wrapText=\"1\"/><\/xf><xf numFmtId=\"0\" fontId=\"5\" fillId=\"0\" borderId=\"1\" xfId=\"0\" applyFont=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment vertical=\"center\" wrapText=\"1\"/><\/xf><xf numFmtId=\"0\" fontId=\"6\" fillId=\"4\" borderId=\"1\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\"><alignment vertical=\"center\"/><\/xf><xf numFmtId=\"0\" fontId=\"1\" fillId=\"3\" borderId=\"3\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"center\" vertical=\"center\" wrapText=\"1\"/><\/xf><xf numFmtId=\"49\" fontId=\"4\" fillId=\"0\" borderId=\"2\" xfId=\"0\" applyNumberFormat=\"1\" applyFont=\"1\" applyBorder=\"1\"><alignment vertical=\"center\"/><\/xf><xf numFmtId=\"0\" fontId=\"8\" fillId=\"0\" borderId=\"2\" xfId=\"0\" applyFont=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"center\" vertical=\"center\"/><\/xf><xf numFmtId=\"49\" fontId=\"2\" fillId=\"0\" borderId=\"2\" xfId=\"0\" applyNumberFormat=\"1\" applyFont=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"left\" vertical=\"center\" wrapText=\"1\"/><\/xf><xf numFmtId=\"0\" fontId=\"5\" fillId=\"0\" borderId=\"2\" xfId=\"0\" applyFont=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment vertical=\"center\" wrapText=\"1\"/><\/xf><xf numFmtId=\"49\" fontId=\"7\" fillId=\"0\" borderId=\"2\" xfId=\"0\" applyNumberFormat=\"1\" applyFont=\"1\" applyBorder=\"1\"><alignment vertical=\"center\"/><\/xf><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"2\" xfId=\"0\" applyBorder=\"1\"><alignment vertical=\"center\"/><\/xf><\/cellXfs><cellStyles count=\"1\"><cellStyle name=\"표준\" xfId=\"0\" builtinId=\"0\"/><\/cellStyles><dxfs count=\"0\"/><tableStyles count=\"0\" defaultTableStyle=\"TableStyleMedium2\" defaultPivotStyle=\"PivotStyleLight16\"/><extLst><ext uri=\"{EB79DEF2-80B8-43e5-95BD-54CBDDF9020C}\" xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:slicerStyles defaultSlicerStyle=\"SlicerStyleLight1\"/><\/ext><ext uri=\"{9260A510-F301-46a8-8635-F512D64BE5F5}\" xmlns:x15=\"http://schemas.microsoft.com/office/spreadsheetml/2010/11/main\"><x15:timelineStyles defaultTimelineStyle=\"TimeSlicerStyleLight1\"/><\/ext><\/extLst><\/styleSheet>", "sheetHead": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"x14ac xr xr2 xr3\" xmlns:x14ac=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac\" xmlns:xr=\"http://schemas.microsoft.com/office/spreadsheetml/2014/revision\" xmlns:xr2=\"http://schemas.microsoft.com/office/spreadsheetml/2015/revision2\" xmlns:xr3=\"http://schemas.microsoft.com/office/spreadsheetml/2016/revision3\" xr:uid=\"{00000000-0001-0000-0000-000000000000}\"><dimension ref=\"{DIM}\"/><sheetViews><sheetView showGridLines=\"0\" tabSelected=\"1\" workbookViewId=\"0\"><selection activeCell=\"A2\" sqref=\"A2\"/><\/sheetView><\/sheetViews><sheetFormatPr defaultRowHeight=\"16.5\"/><cols><col min=\"1\" max=\"1\" width=\"14.625\" bestFit=\"1\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"8\" bestFit=\"1\" customWidth=\"1\"/><col min=\"3\" max=\"4\" width=\"14.25\" bestFit=\"1\" customWidth=\"1\"/><col min=\"5\" max=\"5\" width=\"15.625\" bestFit=\"1\" customWidth=\"1\"/><col min=\"6\" max=\"6\" width=\"58.375\" customWidth=\"1\"/><col min=\"7\" max=\"7\" width=\"8\" bestFit=\"1\" customWidth=\"1\"/><col min=\"8\" max=\"8\" width=\"4.75\" bestFit=\"1\" customWidth=\"1\"/><col min=\"9\" max=\"9\" width=\"16.75\" bestFit=\"1\" customWidth=\"1\"/><col min=\"10\" max=\"10\" width=\"26\" bestFit=\"1\" customWidth=\"1\"/><col min=\"11\" max=\"11\" width=\"30.25\" bestFit=\"1\" customWidth=\"1\"/><col min=\"12\" max=\"12\" width=\"46.875\" customWidth=\"1\"/><\/cols><sheetData>", "sheetTail": "<\/sheetData><phoneticPr fontId=\"3\" type=\"noConversion\"/><pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/><\/worksheet>", "sheet2Head": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"x14ac xr xr2 xr3\" xmlns:x14ac=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac\" xmlns:xr=\"http://schemas.microsoft.com/office/spreadsheetml/2014/revision\" xmlns:xr2=\"http://schemas.microsoft.com/office/spreadsheetml/2015/revision2\" xmlns:xr3=\"http://schemas.microsoft.com/office/spreadsheetml/2016/revision3\" xr:uid=\"{00000000-0001-0000-0100-000000000000}\"><dimension ref=\"A1:A3\"/><sheetViews><sheetView workbookViewId=\"0\"><selection activeCell=\"A2\" sqref=\"A2\"/><\/sheetView><\/sheetViews><sheetFormatPr defaultRowHeight=\"16.5\"/><sheetData>", "sheet2Tail": "<\/sheetData><phoneticPr fontId=\"3\" type=\"noConversion\"/><pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/><\/worksheet>"};
+
+/* ---------- 고정값 ---------- */
+const PAY = "신용";          // 배송결제
+const MGMT_KEY = "osc.mgmt"; // Sheet1 A2 관리번호: 코드에 넣지 않고 각 브라우저에만 저장
+const START_NO = 1;          // 주문번호 시작 순번
+
+/* ---------- 주문서 열 정의 ---------- */
+const OUT_HEADERS = ["주문번호(사방넷)","수취인명","수취인전화번호2","수취인전화번호1","수취인우편번호(1)","수취인주소(4)","TEMP30","수량","배송결제(신용,착불)","배송메세지(합포합계|횡대전용)","옵션(확정)"];
+const COL_LETTERS = "ABCDEFGHIJKL";
+
+/* 원본 머리글 별칭 (공백 제거 후 비교) */
+const ALIASES = {
+  product: ["상품명","옵션","옵션(확정)","상품명(옵션)","옵션명"],
+  qty:     ["수량","주문수량"],
+  name:    ["수취인","수취인명","받는분","받는사람","수령인"],
+  mobile:  ["휴대폰번호","휴대폰","핸드폰","핸드폰번호","휴대전화","수취인휴대폰","수취인휴대폰번호"],
+  tel:     ["전화번호","수취인전화번호","연락처","수취인연락처"],
+  addr:    ["주소","수취인주소","받는분주소","배송지주소","배송지"],
+  zip:     ["우편번호","수취인우편번호"],
+  msg:     ["배송메세지","배송메시지","배송요청사항","배송요청","요청사항"]
+};
+
+const $ = id => document.getElementById(id);
+const state = { baseName:"", rows:[], date:"" };
+
+/* 파일을 넣기 전 보여줄 예시 (실제 고객 아님) */
+const SAMPLE_ROWS = [
+  {product:"묶음판매(양파500g, 대파500g, 무300g)", qty:1, name:"홍길동", mobile:"01000000000", tel:"01000000000", addr:"서울 중구 세종대로 110 (예시 주소)", zip:"04524", msg:""},
+  {product:"대파 1kg", qty:2, name:"김예시", mobile:"01011112222", tel:"", addr:"경기 수원시 팔달구 효원로 1 (예시 주소)", zip:"16490", msg:"문 앞에 놓아주세요"}
+];
+
+/* ---------- 값 정리 ---------- */
+const norm = s => String(s==null?"":s).replace(/\s+/g,"");
+function clean(v){
+  if(v==null) return "";
+  let s = (v instanceof Date) ? v.toISOString().slice(0,10) : String(v);
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").trim();
+  if(/^[.\-·]+$/.test(s)) return "";        // ".", "-", ".." 같은 자리채움 값
+  return s;
+}
+function fixPhone(v){
+  let s = clean(v);
+  if(typeof v==="number") s = String(Math.round(v));
+  if(/^\d{9,10}$/.test(s) && s[0]!=="0") s = "0"+s;   // 숫자로 저장돼 0이 빠진 번호
+  return s;
+}
+function fixZip(v){
+  let s = clean(v);
+  if(typeof v==="number") s = String(Math.round(v));
+  if(/^\d{4}$/.test(s)) s = s.padStart(5,"0");
+  return s;
+}
+function fixQty(v){
+  const s = clean(v);
+  if(s==="") return "";
+  const n = Number(s.replace(/,/g,""));
+  return Number.isFinite(n) ? n : s;
+}
+
+/* ---------- 원본 읽기 ---------- */
+function findHeader(aoa){
+  const limit = Math.min(aoa.length, 15);
+  for(let r=0;r<limit;r++){
+    const cells = (aoa[r]||[]).map(norm);
+    const idx = {};
+    for(const key in ALIASES){
+      const i = cells.findIndex(c => ALIASES[key].includes(c));
+      if(i>=0) idx[key] = i;
+    }
+    if(idx.name!=null && (idx.addr!=null || idx.product!=null)) return {row:r, idx};
+  }
+  return null;
+}
+
+function parseWorkbook(buf){
+  const wb = XLSX.read(buf, {type:"array", cellDates:true, raw:false});
+  let found = null, aoa = null;
+  for(const sn of wb.SheetNames){
+    const a = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, defval:"", blankrows:false});
+    const h = findHeader(a);
+    if(h){ found = h; aoa = a; break; }
+  }
+  if(!found) throw new Error("머리글에서 '수취인'과 '주소' 열을 찾지 못했습니다. 원본 첫 줄 제목을 확인해 주세요.");
+  const {row, idx} = found;
+  const missing = ["product","qty","name","addr"].filter(k => idx[k]==null)
+    .map(k => ({product:"상품명",qty:"수량",name:"수취인",addr:"주소"})[k]);
+  const get = (r,k) => idx[k]==null ? "" : r[idx[k]];
+  const out = [];
+  for(let i=row+1;i<aoa.length;i++){
+    const r = aoa[i]||[];
+    const rec = {
+      product: clean(get(r,"product")),
+      qty:     fixQty(get(r,"qty")),
+      name:    clean(get(r,"name")),
+      mobile:  fixPhone(get(r,"mobile")),
+      tel:     fixPhone(get(r,"tel")),
+      addr:    clean(get(r,"addr")),
+      zip:     fixZip(get(r,"zip")),
+      msg:     clean(get(r,"msg"))
+    };
+    if(!rec.name && !rec.addr && !rec.product) continue;  // 빈 줄
+    out.push(rec);
+  }
+  return {rows: out, missing};
+}
+
+/* ---------- 주문서 행 만들기 ---------- */
+function validDate(s){ return /^20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(s); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0"); }
+const dateValue = () => validDate(state.date) ? state.date : todayStr();
+
+function buildOut(rows){
+  const date = dateValue();
+  return rows.map((r,i) => {
+    const c2 = r.mobile || r.tel, c1 = r.tel || r.mobile;
+    const issues = [];
+    if(!r.name) issues.push("수취인 없음");
+    if(!c1 && !c2) issues.push("전화번호 없음");
+    else if(!/^0\d{8,10}$/.test(c2.replace(/-/g,""))) issues.push("전화번호 형식 확인");
+    if(!r.addr) issues.push("주소 없음");
+    if(!r.zip) issues.push("우편번호 없음");
+    else if(!/^\d{5}$/.test(r.zip)) issues.push("우편번호 5자리 아님");
+    if(r.qty==="") issues.push("수량 없음");
+    else if(typeof r.qty!=="number" || r.qty<=0) issues.push("수량 확인");
+    if(!r.product) issues.push("상품명 없음");
+    return {
+      cells:[ date+"_"+String(START_NO+i).padStart(4,"0"), r.name, c2, c1, r.zip, r.addr, "", r.qty, PAY, r.msg, r.product ],
+      issues
+    };
+  });
+}
+
+/* ---------- 미리보기 ---------- */
+const FLAG = {"수취인 없음":[1],"전화번호 없음":[2,3],"전화번호 형식 확인":[2],"주소 없음":[5],"우편번호 없음":[4],"우편번호 5자리 아님":[4],"수량 없음":[7],"수량 확인":[7],"상품명 없음":[10]};
+const MAX_ROWS = 200;
+
+function renderHead(){
+  const tr = $("headRow");
+  tr.innerHTML = "";
+  const th0 = document.createElement("th");
+  th0.innerHTML = '<span class="col">&nbsp;</span>점검';
+  tr.appendChild(th0);
+  OUT_HEADERS.forEach((h,i) => {
+    const th = document.createElement("th");
+    const col = document.createElement("span"); col.className="col"; col.textContent = COL_LETTERS[i];
+    th.appendChild(col); th.appendChild(document.createTextNode(h));
+    tr.appendChild(th);
+  });
+}
+
+function render(){
+  const has = state.rows.length > 0;
+  const sample = !has;
+  $("dlBtn").disabled = !has || !getMgmt();
+  $("resetBtn").disabled = !has && $("err").hidden;
+
+  const out = buildOut(has ? state.rows : SAMPLE_ROWS);
+  const body = $("body");
+  body.innerHTML = "";
+  out.slice(0,MAX_ROWS).forEach(o => {
+    const tr = document.createElement("tr");
+    const flagged = new Set(); o.issues.forEach(k => (FLAG[k]||[]).forEach(c => flagged.add(c)));
+    const st = document.createElement("td"); st.className="state";
+    const pill = document.createElement("span");
+    if(sample){ pill.className="pill sample"; pill.textContent="예시"; }
+    else if(o.issues.length){ pill.className="pill warn"; pill.innerHTML='<span class="dot"></span>확인'; }
+    else { pill.className="pill ok"; pill.innerHTML='<span class="dot"></span>정상'; }
+    st.appendChild(pill);
+    if(o.issues.length && !sample){ const s=document.createElement("span"); s.className="issue"; s.textContent=o.issues.join(", "); st.appendChild(s); }
+    tr.appendChild(st);
+    o.cells.forEach((v,i) => {
+      const td = document.createElement("td");
+      const cls = [];
+      if(i===0||i===2||i===3||i===4) cls.push("mono");
+      if(i===5||i===9||i===10) cls.push("wrapc");
+      if(i===7) cls.push("num");
+      if(v===""||v==null){ cls.push("empty"); td.textContent = i===6 ? "" : "—"; }
+      else td.textContent = String(v);
+      if(flagged.has(i)) cls.push("flag");
+      td.className = cls.join(" ");
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  const more = $("more");
+  if(out.length>MAX_ROWS){ more.hidden=false; more.textContent = `미리보기는 ${MAX_ROWS}건까지 보여줍니다. 내려받는 파일에는 ${out.length}건이 모두 들어갑니다.`; }
+  else more.hidden = true;
+
+  const total = out.reduce((a,o)=>a+(typeof o.cells[7]==="number"?o.cells[7]:0),0);
+  const warn = out.filter(o=>o.issues.length).length;
+  if(sample){
+    $("stats").innerHTML = '<span class="pill sample"><span class="dot"></span>예시 데이터</span><span>파일을 넣으면 실제 주문으로 바뀝니다</span>';
+    return;
+  }
+  $("stats").innerHTML =
+    `<span>주문 <b>${out.length}</b>건</span><span>수량 합계 <b>${total}</b></span>` +
+    (warn ? `<span class="pill warn"><span class="dot"></span>확인 필요 ${warn}건</span>` : '<span class="pill ok"><span class="dot"></span>모두 정상</span>');
+}
+
+/* ---------- 파일명 ---------- */
+function outFileName(){
+  let stem = state.baseName || ("온라인셀러_주문정보_"+dateValue());
+  stem = stem.replace(/\s*\(\d+\)$/,"");
+  if(!/_수정$/.test(stem)) stem += "_수정";
+  return stem + ".xlsx";
+}
+
+/* ---------- xlsx 만들기 ---------- */
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function buildXlsx(out, mgmt){
+  const sst = [], sstIdx = new Map(); let sstCount = 0;
+  const si = s => { sstCount++; if(!sstIdx.has(s)){ sstIdx.set(s, sst.length); sst.push(s); } return sstIdx.get(s); };
+  const strCell = (ref, style, v) => (v===""||v==null) ? `<c r="${ref}" s="${style}"/>` : `<c r="${ref}" s="${style}" t="s"><v>${si(String(v))}</v></c>`;
+  const anyCell = (ref, style, v) => (typeof v==="number") ? `<c r="${ref}" s="${style}"><v>${v}</v></c>` : strCell(ref, style, v);
+
+  /* 시트1: 주문서 */
+  let rows = '<row r="1" spans="1:12" s="1" customFormat="1" ht="30" customHeight="1">';
+  OUT_HEADERS.forEach((h,i) => { rows += strCell(COL_LETTERS[i]+"1", 4, h); });
+  rows += "</row>";
+  out.forEach((o,k) => {
+    const r = k+2, c = o.cells;
+    rows += `<row r="${r}" spans="1:12" s="10" customFormat="1" ht="18.95" customHeight="1">`
+      + strCell("A"+r,5,c[0]) + strCell("B"+r,6,c[1]) + strCell("C"+r,6,c[2]) + strCell("D"+r,6,c[3])
+      + strCell("E"+r,6,c[4]) + strCell("F"+r,6,c[5]) + `<c r="G${r}" s="7"/>` + anyCell("H"+r,8,c[7])
+      + strCell("I"+r,7,c[8]) + strCell("J"+r,5,c[9]) + strCell("K"+r,6,c[10]) + `<c r="L${r}" s="9"/>`
+      + "</row>";
+  });
+  const lastRow = Math.max(2, out.length+1);
+  const sheet1 = TPL.sheetHead.replace("{DIM}", "A1:L"+lastRow) + rows + TPL.sheetTail;
+
+  /* 시트2: 관리번호 */
+  const m = String(mgmt||"").trim();
+  const mCell = m==="" ? '<c r="A2" s="2"/>' : (/^\d{1,15}$/.test(m) ? `<c r="A2" s="2"><v>${m}</v></c>` : strCell("A2",2,m));
+  const sheet2 = TPL.sheet2Head + `<row r="1" spans="1:1">${strCell("A1",3,"관리번호")}</row><row r="2" spans="1:1">${mCell}</row><row r="3" spans="1:1"><c r="A3" s="2"/></row>` + TPL.sheet2Tail;
+
+  const sstXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    + `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sstCount}" uniqueCount="${sst.length}">`
+    + sst.map(s => `<si><t${/^\s|\s$/.test(s)?' xml:space="preserve"':''}>${esc(s)}</t></si>`).join("") + "</sst>";
+
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/,"Z");
+  const core = TPL.core.replace(/\{NOW\}/g, now);
+
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", TPL.contentTypes);
+  zip.file("_rels/.rels", TPL.rels);
+  zip.file("docProps/app.xml", TPL.app);
+  zip.file("docProps/core.xml", core);
+  zip.file("xl/workbook.xml", TPL.workbook);
+  zip.file("xl/_rels/workbook.xml.rels", TPL.workbookRels);
+  zip.file("xl/theme/theme1.xml", TPL.theme);
+  zip.file("xl/styles.xml", TPL.styles);
+  zip.file("xl/sharedStrings.xml", sstXml);
+  zip.file("xl/worksheets/sheet1.xml", sheet1);
+  zip.file("xl/worksheets/sheet2.xml", sheet2);
+  return zip.generateAsync({type:"blob", compression:"DEFLATE", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+
+/* ---------- 저장 ---------- */
+let dlCap = null;
+if(window.claude && typeof window.claude.use==="function"){
+  dlCap = window.claude.use("downloads").catch(()=>null);
+}
+function setMsg(text, kind){ const m=$("msg"); m.textContent=text; m.className="msg"+(kind?" "+kind:""); }
+
+async function saveBlob(blob, filename){
+  if(dlCap){
+    const dl = await dlCap;
+    if(!dl){ setMsg("이 화면에서는 파일 저장이 막혀 있습니다. 앱을 브라우저에서 열어 주세요.","warn"); return; }
+    try{
+      const r = await dl.save({filename, data: blob});
+      setMsg(r && r.status==="delivered" ? "보냈습니다" : "저장했습니다: "+filename, "ok");
+    }catch(e){
+      const code = e && e.code;
+      if(code==="declined") setMsg("저장을 취소했습니다.");
+      else if(code==="rate_limited") setMsg("이미 저장 창이 열려 있습니다. 그 창을 먼저 닫아 주세요.","warn");
+      else setMsg("이 화면에서는 저장할 수 없습니다. ("+(code||"알 수 없음")+")","warn");
+    }
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  setMsg("저장했습니다: "+filename, "ok");
+}
+
+/* ---------- 파일 넣기 ---------- */
+function showError(text){
+  const err = $("err");
+  err.textContent = text; err.hidden = false;
+  $("resetBtn").disabled = false;
+}
+
+async function handleFile(file){
+  $("err").hidden = true; setMsg("");
+  if(!file) return;
+  if(typeof XLSX==="undefined" || typeof JSZip==="undefined"){
+    showError("엑셀 처리 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요."); return;
+  }
+  try{
+    const buf = await file.arrayBuffer();
+    const {rows, missing} = parseWorkbook(buf);
+    if(!rows.length) throw new Error("주문 행이 없습니다. 머리글 아래에 주문이 있는지 확인해 주세요.");
+    state.baseName = file.name.replace(/\.(xlsx|xls|csv)$/i,"");
+    state.rows = rows;
+    const m = file.name.match(/(20\d{6})/);
+    state.date = (m && validDate(m[1])) ? m[1] : todayStr();
+    $("drop").classList.add("compact");
+    $("fileChip").hidden = false;
+    $("fileName").textContent = file.name;
+    $("fileMeta").textContent = `주문 ${rows.length}건` + (missing.length ? ` · 없는 열: ${missing.join(", ")}` : "");
+    $("dropTitle").textContent = "다른 파일 넣기";
+    render();
+  }catch(e){
+    showError((e && e.message && /[가-힣]/.test(e.message)) ? e.message : "파일을 읽지 못했습니다. 엑셀(.xlsx/.xls) 또는 CSV 파일인지 확인해 주세요.");
+  }
+}
+
+function resetAll(){
+  state.baseName = ""; state.rows = []; state.date = "";
+  $("file").value = "";
+  $("drop").classList.remove("compact","over");
+  $("fileChip").hidden = true;
+  $("fileName").textContent = ""; $("fileMeta").textContent = "";
+  $("err").hidden = true; $("err").textContent = "";
+  $("dropTitle").textContent = "원본 파일을 여기에 놓거나 눌러서 선택";
+  setMsg("");
+  render();
+  window.scrollTo({top:0});
+}
+
+const drop = $("drop");
+$("file").addEventListener("change", e => { handleFile(e.target.files[0]); e.target.value=""; });
+["dragenter","dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if(f) handleFile(f); });
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => { if(!drop.contains(e.target)){ e.preventDefault(); const f=e.dataTransfer&&e.dataTransfer.files[0]; if(f) handleFile(f); } });
+
+$("resetBtn").addEventListener("click", resetAll);
+$("dlBtn").addEventListener("click", async () => {
+  if(!state.rows.length) return;
+  if(!getMgmt()){ showSetup(true); setMsg("관리번호를 먼저 입력해 주세요.","warn"); return; }
+  const btn = $("dlBtn"); btn.disabled = true; setMsg("만드는 중…");
+  try{
+    const blob = await buildXlsx(buildOut(state.rows), getMgmt());
+    await saveBlob(blob, outFileName());
+  }catch(e){
+    setMsg("파일을 만들지 못했습니다: "+(e && e.message || e), "warn");
+  }finally{ btn.disabled = !state.rows.length; }
+});
+
+/* ---------- 관리번호 (브라우저 저장) ---------- */
+let mgmtMem = "";
+function getMgmt(){
+  try{ const v = localStorage.getItem(MGMT_KEY); if(v) return v; }catch(e){}
+  return mgmtMem;
+}
+function setMgmt(v){
+  mgmtMem = v;
+  try{ localStorage.setItem(MGMT_KEY, v); return localStorage.getItem(MGMT_KEY) === v; }catch(e){ return false; }
+}
+function showSetup(show){
+  $("setup").hidden = !show;
+  $("mgmtEdit").hidden = show || !getMgmt();
+  if(show) $("mgmtInput").value = getMgmt();
+}
+$("setup").addEventListener("submit", e => {
+  e.preventDefault();
+  const v = $("mgmtInput").value.trim();
+  if(!v){ $("mgmtInput").focus(); setMsg("관리번호를 입력해 주세요.","warn"); return; }
+  const saved = setMgmt(v);
+  showSetup(false);
+  setMsg(saved ? "관리번호를 저장했습니다." : "이 브라우저는 저장이 막혀 있어 이번에만 사용합니다.", saved ? "ok" : "warn");
+  render();
+});
+$("mgmtEdit").addEventListener("click", () => { showSetup(true); $("mgmtInput").focus(); $("mgmtInput").select(); });
+
+/* ---------- 시작 ---------- */
+showSetup(!getMgmt());
+renderHead();
+render();
+</script>
+
+</body>
+</html>
