@@ -397,10 +397,11 @@ function render(){
 
 /* ---------- 파일명 ---------- */
 function outFileName(){
-  let stem = state.baseName || ("온라인셀러_주문정보_"+dateValue());
-  stem = stem.replace(/\s*\(\d+\)$/,"");
-  if(!/_수정$/.test(stem)) stem += "_수정";
-  return stem + ".xlsx";
+  const today = dateValue();
+  let stem = (state.baseName || "온라인셀러_주문정보").replace(/\s*\(\d+\)$/,"").replace(/_수정$/,"");
+  // 원본 파일명의 날짜를 오늘 날짜로 바꾸고, 날짜가 없으면 뒤에 붙임
+  stem = /20\d{6}/.test(stem) ? stem.replace(/20\d{6}/, today) : stem + "_" + today;
+  return stem + "_수정.xlsx";
 }
 
 /* ---------- xlsx 만들기 ---------- */
