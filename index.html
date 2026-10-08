@@ -305,7 +305,7 @@ function parseWorkbook(buf){
 /* ---------- 주문서 행 만들기 ---------- */
 function validDate(s){ return /^20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(s); }
 function todayStr(){ const d=new Date(); return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0"); }
-const dateValue = () => validDate(state.date) ? state.date : todayStr();
+const dateValue = () => todayStr();   // 주문번호는 항상 오늘 날짜 기준
 
 function buildOut(rows){
   const date = dateValue();
@@ -502,8 +502,6 @@ async function handleFile(file){
     if(!rows.length) throw new Error("주문 행이 없습니다. 머리글 아래에 주문이 있는지 확인해 주세요.");
     state.baseName = file.name.replace(/\.(xlsx|xls|csv)$/i,"");
     state.rows = rows;
-    const m = file.name.match(/(20\d{6})/);
-    state.date = (m && validDate(m[1])) ? m[1] : todayStr();
     $("drop").classList.add("compact");
     $("fileChip").hidden = false;
     $("fileName").textContent = file.name;
@@ -542,6 +540,7 @@ $("dlBtn").addEventListener("click", async () => {
   if(!getMgmt()){ showSetup(true); setMsg("관리번호를 먼저 입력해 주세요.","warn"); return; }
   const btn = $("dlBtn"); btn.disabled = true; setMsg("만드는 중…");
   try{
+    render();   // 자정을 넘겨 열어 둔 경우에도 미리보기 날짜를 오늘로 맞춤
     const blob = await buildXlsx(buildOut(state.rows), getMgmt());
     await saveBlob(blob, outFileName());
   }catch(e){
